@@ -10,8 +10,8 @@ const aviso = document.getElementById("aviso");
 
 // O localStorage nem sempre esta disponivel: abrindo o arquivo direto do disco
 // (file://), em aba anonima, ou com o navegador bloqueando dados de site, o
-// acesso lanca excecao. Quando isso acontece a agenda continua funcionando na
-// memoria; so nao guarda ao fechar a pagina.
+// acesso lanca excecao. Quando isso acontece a agenda continua funcionando
+// na memoria; so nao guarda ao fechar a pagina.
 let memoria = [];
 let temArmazenamento = true;
 
@@ -22,6 +22,7 @@ function semArmazenamento() {
 
 function carregar() {
   if (!temArmazenamento) return memoria;
+
   try {
     const salvo = localStorage.getItem(CHAVE);
     return salvo ? JSON.parse(salvo) : [];
@@ -33,7 +34,9 @@ function carregar() {
 
 function salvar(consultas) {
   memoria = consultas;
+
   if (!temArmazenamento) return;
+
   try {
     localStorage.setItem(CHAVE, JSON.stringify(consultas));
   } catch (erro) {
@@ -43,8 +46,29 @@ function salvar(consultas) {
 
 function horarioOcupado(consultas, nova) {
   return consultas.some(
-    (c) => c.data === nova.data && c.hora === nova.hora && c.profissional === nova.profissional
+    (c) =>
+      c.data === nova.data &&
+      c.hora === nova.hora &&
+      c.profissional === nova.profissional
   );
+}
+
+function cancelarConsulta(data, hora, profissional) {
+  const consultas = carregar();
+
+  const novasConsultas = consultas.filter(
+    (c) =>
+      !(
+        c.data === data &&
+        c.hora === hora &&
+        c.profissional === profissional
+      )
+  );
+
+  salvar(novasConsultas);
+
+  mensagem.textContent = "Consulta cancelada.";
+  renderizar();
 }
 
 function renderizar() {
@@ -55,16 +79,49 @@ function renderizar() {
   lista.innerHTML = "";
 
   if (consultas.length === 0) {
-    lista.innerHTML = '<tr><td colspan="4" class="vazio">Nenhuma consulta agendada.</td></tr>';
+    lista.innerHTML =
+      '<tr><td colspan="5" class="vazio">Nenhuma consulta agendada.</td></tr>';
     return;
   }
 
   for (const c of consultas) {
     const linha = document.createElement("tr");
-    linha.innerHTML = `<td>${c.data}</td><td>${c.hora}</td><td>${c.profissional}</td><td>${c.paciente}</td>`;
+
+    linha.innerHTML = `
+      <td>${c.data}</td>
+      <td>${c.hora}</td>
+      <td>${c.profissional}</td>
+      <td>${c.paciente}</td>
+      <td>
+        <button
+          type="button"
+          class="botao-cancelar"
+          data-data="${c.data}"
+          data-hora="${c.hora}"
+          data-profissional="${c.profissional}"
+        >
+          Cancelar
+        </button>
+      </td>
+    `;
+
     lista.appendChild(linha);
   }
 }
+
+lista.addEventListener("click", (evento) => {
+  if (!evento.target.classList.contains("botao-cancelar")) {
+    return;
+  }
+
+  const botao = evento.target;
+
+  cancelarConsulta(
+    botao.dataset.data,
+    botao.dataset.hora,
+    botao.dataset.profissional
+  );
+});
 
 formulario.addEventListener("submit", (evento) => {
   evento.preventDefault();
@@ -78,13 +135,17 @@ formulario.addEventListener("submit", (evento) => {
 
   const consultas = carregar();
 
+  // Issue #1:
+  // Se o horário já estiver ocupado, informa o problema
+  // e mantém os dados preenchidos no formulário.
   if (horarioOcupado(consultas, nova)) {
-  mensagem.textContent = `O horário ${nova.hora} já está ocupado para essa profissional.`;
-  return;
-}
+    mensagem.textContent = `O horário ${nova.hora} já está ocupado para essa profissional.`;
+    return;
+  }
 
   consultas.push(nova);
   salvar(consultas);
+
   mensagem.textContent = "Consulta agendada.";
   formulario.reset();
   renderizar();
